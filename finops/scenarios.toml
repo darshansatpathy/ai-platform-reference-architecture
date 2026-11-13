@@ -1,0 +1,56 @@
+# FinOps inputs for the reference platform.
+#
+# PLACEHOLDER VALUES. Every number in this file is an illustrative assumption, not a quote, a
+# benchmark or a measurement. Replace prices with your contracted rates and volumes with your
+# own forecast before using any output for a decision.
+
+[prices]                        # USD per million tokens, for the model class that serves most traffic
+input_per_mtok = 1.00           # PLACEHOLDER
+output_per_mtok = 5.00          # PLACEHOLDER
+cache_write_multiplier = 1.25   # applied to the input price; verify for the cache lifetime you use
+cache_read_multiplier = 0.10    # applied to the input price; verify
+
+# Fixed monthly cost per component, keyed by the component's cost_tag. PLACEHOLDER.
+[fixed_monthly_usd]
+ai-gateway = 2500
+guardrails-service = 1800
+model-router = 0                # embedded in the gateway
+agent-runtime = 3000
+tool-registry = 900
+memory-service = 1200
+vector-store = 2200
+observability-stack = 3500
+identity-provider = 800
+secrets-manager = 300
+network-fabric = 1500
+private-model-endpoint = 9000
+lakehouse = 2600
+eval-service = 1100
+cicd-pipeline = 600
+
+[[scenarios]]
+name = "pilot"
+requests_per_day = 2000
+llm_calls_per_request = 3
+avg_input_tokens = 3500
+avg_output_tokens = 350
+cacheable_fraction = 0.70       # share of each call's input that is a stable prefix
+cache_hit_ratio = 0.60          # share of calls that find that prefix already cached
+
+[[scenarios]]
+name = "launch"
+requests_per_day = 40000
+llm_calls_per_request = 3
+avg_input_tokens = 3500
+avg_output_tokens = 350
+cacheable_fraction = 0.70
+cache_hit_ratio = 0.80
+
+[[scenarios]]
+name = "scale"
+requests_per_day = 400000
+llm_calls_per_request = 4
+avg_input_tokens = 4000
+avg_output_tokens = 400
+cacheable_fraction = 0.70
+cache_hit_ratio = 0.90

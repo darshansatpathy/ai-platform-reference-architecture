@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, types, tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Mypy (strict)
+        run: mypy
+      - name: Tests with coverage
+        run: pytest --cov=archfit --cov-report=term-missing --cov-fail-under=85
+
+  architecture:
+    name: Architecture fitness functions
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e .
+      - name: Check the design against its rules
+        run: archfit check --fail-on low --format markdown | tee fitness.md
+      - name: Publish fitness summary
+        if: always()
+        run: cat fitness.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Generated documents are current
+        run: archfit docs --check
+
+  package:
+    name: Wheel installs and runs on its own
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          pip install build
+          python -m build --wheel
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+          cd "$(mktemp -d)"
+          /tmp/clean/bin/archfit rules
+          /tmp/clean/bin/archfit --version
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e . pip-audit
+      - name: pip-audit
+        run: pip-audit --skip-editable

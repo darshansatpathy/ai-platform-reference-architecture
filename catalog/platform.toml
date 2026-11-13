@@ -1,0 +1,897 @@
+# Platform catalog: the single source of truth for the reference architecture.
+# Everything in docs/generated is rendered from this file, and `archfit check` enforces the rules on it.
+# SLO figures are DESIGN TARGETS for a reference design, not measurements of any real system.
+
+[platform]
+name = "Enterprise AI Platform"
+version = "1.0.0"
+description = "Reference architecture for a governed, multi-model AI platform."
+
+[policy]
+# Thresholds the fitness functions apply.
+max_rto_minutes = { 1 = 60, 2 = 240 }
+sync_availability_tolerance = 0.005
+telemetry_required = ["traces", "metrics", "logs"]
+
+# Data classification, lowest to highest sensitivity.
+[[data_classes]]
+id = "public"
+level = 0
+
+[[data_classes]]
+id = "internal"
+level = 1
+
+[[data_classes]]
+id = "confidential"
+level = 2
+
+[[data_classes]]
+id = "restricted"
+level = 3
+
+# Layers and the layers each may depend on.
+[[layers]]
+id = "channels"
+name = "Channels"
+order = 1
+may_depend_on = ["agents", "platform", "data", "foundation"]
+
+[[layers]]
+id = "agents"
+name = "Agents"
+order = 2
+may_depend_on = ["platform", "foundation"]
+
+[[layers]]
+id = "platform"
+name = "AI platform"
+order = 3
+may_depend_on = ["data", "foundation", "external"]
+
+[[layers]]
+id = "data"
+name = "Data"
+order = 4
+may_depend_on = ["foundation"]
+
+[[layers]]
+id = "foundation"
+name = "Foundation"
+order = 5
+may_depend_on = []
+
+[[layers]]
+id = "external"
+name = "External"
+order = 6
+may_depend_on = []
+
+# Teams and how to reach them.
+[[teams]]
+id = "platform-team"
+responsibility = "Owns the AI gateway, routing, registries and agent runtime"
+contact = "pagerduty:ai-platform-primary"
+
+[[teams]]
+id = "data-platform-team"
+responsibility = "Owns data stores, ingestion and the catalog"
+contact = "pagerduty:data-platform-primary"
+
+[[teams]]
+id = "security-team"
+responsibility = "Owns identity, secrets, guardrail policy and model risk review"
+contact = "pagerduty:security-oncall"
+
+[[teams]]
+id = "sre-team"
+responsibility = "Owns observability, networking and delivery pipelines"
+contact = "pagerduty:sre-primary"
+
+[[teams]]
+id = "ml-quality-team"
+responsibility = "Owns evaluation, human review and quality gates"
+contact = "pagerduty:ml-quality-business-hours"
+
+[[teams]]
+id = "product-teams"
+responsibility = "Build the assistants and pipelines that use the platform"
+contact = "pagerduty:product-oncall"
+
+[[teams]]
+id = "finops-team"
+responsibility = "Owns cost allocation and unit economics"
+contact = "slack:#finops"
+
+[[teams]]
+id = "vendor-management"
+responsibility = "Owns model-provider and SaaS contracts"
+contact = "slack:#vendor-mgmt"
+
+# ---- channels
+
+[[components]]
+id = "web-assistant"
+name = "Customer web assistant"
+layer = "channels"
+tier = 1
+owner = "product-teams"
+description = "Customer-facing chat assistant embedded in the web and mobile apps."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.0
+cost_tag = "web-assistant"
+p95_latency_ms = 3000
+rto_minutes = 60
+rpo_minutes = 15
+runbook = "docs/runbooks/web-assistant.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0001", "0006"]
+entrypoint = true
+
+[[components.depends_on]]
+target = "agent-runtime"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "internal-copilot"
+name = "Employee copilot"
+layer = "channels"
+tier = 2
+owner = "product-teams"
+description = "Employee-facing assistant for knowledge search and task automation."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.0
+cost_tag = "internal-copilot"
+p95_latency_ms = 4000
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/internal-copilot.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0001"]
+entrypoint = true
+
+[[components.depends_on]]
+target = "agent-runtime"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "batch-pipelines"
+name = "Batch AI pipelines"
+layer = "channels"
+tier = 3
+owner = "product-teams"
+description = "Scheduled classification, summarisation and enrichment jobs."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 98.0
+cost_tag = "batch-pipelines"
+rto_minutes = 1440
+rpo_minutes = 240
+runbook = "docs/runbooks/batch-pipelines.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0007"]
+entrypoint = true
+
+[[components.depends_on]]
+target = "workflow-orchestrator"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "lakehouse"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+# ---- agents
+
+[[components]]
+id = "agent-runtime"
+name = "Agent runtime"
+layer = "agents"
+tier = 1
+owner = "platform-team"
+description = "Runs tool-using agents with budgets, approvals and audit."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "agent-runtime"
+p95_latency_ms = 2500
+rto_minutes = 60
+rpo_minutes = 15
+runbook = "docs/runbooks/agent-runtime.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0002", "0003"]
+reference_impl = "https://github.com/darshansatpathy/claude-agent-reference"
+
+[[components.depends_on]]
+target = "ai-gateway"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "tool-registry"
+kind = "sync"
+data = "internal"
+optional = true
+
+[[components.depends_on]]
+target = "memory-service"
+kind = "sync"
+data = "confidential"
+fallback = "vector-store"
+
+[[components.depends_on]]
+target = "prompt-registry"
+kind = "library"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "workflow-orchestrator"
+name = "Workflow orchestrator"
+layer = "agents"
+tier = 2
+owner = "platform-team"
+description = "Durable multi-step workflows and batch fan-out with retries and human steps."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.0
+cost_tag = "workflow-orchestrator"
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/workflow-orchestrator.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0007"]
+reference_impl = "https://github.com/darshansatpathy/multi-agent-ops-automation"
+
+[[components.depends_on]]
+target = "agent-runtime"
+kind = "sync"
+data = "confidential"
+
+[[components.depends_on]]
+target = "human-review-inbox"
+kind = "async"
+data = "confidential"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+# ---- platform
+
+[[components]]
+id = "ai-gateway"
+name = "AI gateway"
+layer = "platform"
+tier = 1
+owner = "platform-team"
+description = "Single entry to every model: authentication, token budgets, routing, guardrails, logging."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.9
+cost_tag = "ai-gateway"
+p95_latency_ms = 400
+rto_minutes = 30
+rpo_minutes = 5
+runbook = "docs/runbooks/ai-gateway.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0001", "0004"]
+egress = true
+reference_impl = "https://github.com/darshansatpathy/azure-ai-landing-zone"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "guardrails-service"
+kind = "sync"
+data = "restricted"
+
+[[components.depends_on]]
+target = "model-router"
+kind = "library"
+data = "internal"
+
+[[components.depends_on]]
+target = "primary-model-provider"
+kind = "sync"
+data = "confidential"
+fallback = "secondary-model-provider"
+
+[[components.depends_on]]
+target = "private-model-endpoint"
+kind = "sync"
+data = "restricted"
+optional = true
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components.depends_on]]
+target = "cost-management"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "model-router"
+name = "Model router"
+layer = "platform"
+tier = 1
+owner = "platform-team"
+description = "Chooses model and provider by task, cost and health. Embedded in the gateway as a library."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.9
+cost_tag = "model-router"
+rto_minutes = 30
+rpo_minutes = 5
+runbook = "docs/runbooks/model-router.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0004", "0005"]
+reference_impl = "https://github.com/darshansatpathy/llm-router-cost-telemetry"
+
+[[components.depends_on]]
+target = "prompt-registry"
+kind = "library"
+data = "internal"
+
+[[components]]
+id = "guardrails-service"
+name = "Guardrails service"
+layer = "platform"
+tier = 1
+owner = "security-team"
+description = "Input and output policy: PII redaction, injection screening, tool-call policy."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.95
+cost_tag = "guardrails-service"
+p95_latency_ms = 150
+rto_minutes = 30
+rpo_minutes = 5
+runbook = "docs/runbooks/guardrails-service.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0003"]
+reference_impl = "https://github.com/darshansatpathy/agent-guardrails-gateway"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "prompt-registry"
+name = "Prompt and config registry"
+layer = "platform"
+tier = 1
+owner = "platform-team"
+description = "Versioned prompts, tool descriptions and routing rules, promoted through environments."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.9
+cost_tag = "prompt-registry"
+rto_minutes = 30
+rpo_minutes = 5
+runbook = "docs/runbooks/prompt-registry.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0005"]
+
+[[components.depends_on]]
+target = "cicd-pipeline"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "tool-registry"
+name = "Tool registry (MCP)"
+layer = "platform"
+tier = 2
+owner = "platform-team"
+description = "Catalogue and access broker for tools exposed to agents."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.9
+cost_tag = "tool-registry"
+p95_latency_ms = 200
+rto_minutes = 120
+rpo_minutes = 15
+runbook = "docs/runbooks/tool-registry.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0003"]
+egress = true
+reference_impl = "https://github.com/darshansatpathy/mcp-server-toolkit"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "secrets-manager"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "enterprise-saas-apis"
+kind = "sync"
+data = "confidential"
+optional = true
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "memory-service"
+name = "Memory service"
+layer = "platform"
+tier = 2
+owner = "platform-team"
+description = "Per-user and per-task memory with retention and erasure."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.8
+cost_tag = "memory-service"
+p95_latency_ms = 120
+rto_minutes = 120
+rpo_minutes = 15
+runbook = "docs/runbooks/memory-service.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0006"]
+reference_impl = "https://github.com/darshansatpathy/agent-memory-service"
+
+[[components.depends_on]]
+target = "vector-store"
+kind = "sync"
+data = "restricted"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "eval-service"
+name = "Evaluation service"
+layer = "platform"
+tier = 2
+owner = "ml-quality-team"
+description = "Runs regression, safety and quality evaluations; gates promotion."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.0
+cost_tag = "eval-service"
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/eval-service.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0005"]
+reference_impl = "https://github.com/darshansatpathy/agent-eval-harness"
+
+[[components.depends_on]]
+target = "ai-gateway"
+kind = "async"
+data = "confidential"
+
+[[components.depends_on]]
+target = "lakehouse"
+kind = "async"
+data = "confidential"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "human-review-inbox"
+name = "Human review inbox"
+layer = "platform"
+tier = 2
+owner = "ml-quality-team"
+description = "Queue where people approve, correct or reject agent actions."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.5
+cost_tag = "human-review-inbox"
+rto_minutes = 240
+rpo_minutes = 15
+runbook = "docs/runbooks/human-review-inbox.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0003"]
+reference_impl = "https://github.com/darshansatpathy/human-in-the-loop-inbox"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "private-model-endpoint"
+name = "Private model endpoint"
+layer = "platform"
+tier = 2
+owner = "platform-team"
+description = "Self-hosted model for restricted data that may not leave the company."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.5
+cost_tag = "private-model-endpoint"
+p95_latency_ms = 1500
+rto_minutes = 120
+rpo_minutes = 15
+runbook = "docs/runbooks/private-model-endpoint.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0004"]
+reference_impl = "https://github.com/darshansatpathy/ha-model-inference-platform"
+
+[[components.depends_on]]
+target = "network-fabric"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+# ---- data
+
+[[components]]
+id = "vector-store"
+name = "Vector store"
+layer = "data"
+tier = 2
+owner = "data-platform-team"
+description = "Embeddings and retrieval indexes with row-level security."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.9
+cost_tag = "vector-store"
+p95_latency_ms = 100
+rto_minutes = 120
+rpo_minutes = 15
+runbook = "docs/runbooks/vector-store.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0006"]
+reference_impl = "https://github.com/darshansatpathy/agentic-rag-reference"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "network-fabric"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "ingestion-pipeline"
+name = "Document ingestion"
+layer = "data"
+tier = 3
+owner = "data-platform-team"
+description = "Parses, chunks, classifies and indexes documents."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.0
+cost_tag = "ingestion-pipeline"
+rto_minutes = 1440
+rpo_minutes = 240
+runbook = "docs/runbooks/ingestion-pipeline.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0006"]
+entrypoint = true
+
+[[components.depends_on]]
+target = "lakehouse"
+kind = "sync"
+data = "restricted"
+
+[[components.depends_on]]
+target = "vector-store"
+kind = "async"
+data = "restricted"
+
+[[components.depends_on]]
+target = "data-catalog"
+kind = "async"
+data = "internal"
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "lakehouse"
+name = "Lakehouse"
+layer = "data"
+tier = 2
+owner = "data-platform-team"
+description = "Governed analytical storage for evaluation sets, logs and training data."
+trust_zone = "internal"
+data_max_class = "restricted"
+availability = 99.95
+cost_tag = "lakehouse"
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/lakehouse.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0006"]
+reference_impl = "https://github.com/darshansatpathy/lakehouse-iceberg-trino"
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "network-fabric"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "data-catalog"
+kind = "async"
+data = "internal"
+
+[[components]]
+id = "data-catalog"
+name = "Data catalog and lineage"
+layer = "data"
+tier = 3
+owner = "data-platform-team"
+description = "Classification, ownership and lineage for every dataset."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "data-catalog"
+rto_minutes = 1440
+rpo_minutes = 240
+runbook = "docs/runbooks/data-catalog.md"
+telemetry = ["traces", "metrics", "logs"]
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+# ---- foundation
+
+[[components]]
+id = "identity-provider"
+name = "Identity provider"
+layer = "foundation"
+tier = 1
+owner = "security-team"
+description = "Workforce and workload identity, tokens, conditional access."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.99
+cost_tag = "identity-provider"
+p95_latency_ms = 100
+rto_minutes = 15
+rpo_minutes = 0
+runbook = "docs/runbooks/identity-provider.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0001"]
+
+[[components.depends_on]]
+target = "network-fabric"
+kind = "sync"
+data = "internal"
+
+[[components]]
+id = "secrets-manager"
+name = "Secrets manager"
+layer = "foundation"
+tier = 1
+owner = "security-team"
+description = "Secrets, keys and certificates with rotation."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.99
+cost_tag = "secrets-manager"
+p95_latency_ms = 100
+rto_minutes = 15
+rpo_minutes = 0
+runbook = "docs/runbooks/secrets-manager.md"
+telemetry = ["traces", "metrics", "logs"]
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components]]
+id = "network-fabric"
+name = "Network fabric"
+layer = "foundation"
+tier = 1
+owner = "sre-team"
+description = "Private connectivity, DNS and egress control."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.99
+cost_tag = "network-fabric"
+rto_minutes = 15
+rpo_minutes = 0
+runbook = "docs/runbooks/network-fabric.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0001"]
+
+[[components]]
+id = "observability-stack"
+name = "Observability stack"
+layer = "foundation"
+tier = 2
+owner = "sre-team"
+description = "Traces, metrics and logs with redaction and retention."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "observability-stack"
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/observability-stack.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0008"]
+reference_impl = "https://github.com/darshansatpathy/agent-tracing-otel"
+
+[[components.depends_on]]
+target = "network-fabric"
+kind = "sync"
+data = "internal"
+
+[[components]]
+id = "cost-management"
+name = "Cost management"
+layer = "foundation"
+tier = 3
+owner = "finops-team"
+description = "Tag-based allocation, budgets and anomaly alerts."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.0
+cost_tag = "cost-management"
+rto_minutes = 1440
+rpo_minutes = 1440
+runbook = "docs/runbooks/cost-management.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0009"]
+
+[[components.depends_on]]
+target = "observability-stack"
+kind = "async"
+data = "internal"
+
+# ---- platform
+
+[[components]]
+id = "cicd-pipeline"
+name = "Delivery pipeline"
+layer = "platform"
+tier = 2
+owner = "sre-team"
+description = "Builds, evaluates and promotes services, prompts and infrastructure."
+trust_zone = "internal"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "cicd-pipeline"
+rto_minutes = 240
+rpo_minutes = 60
+runbook = "docs/runbooks/cicd-pipeline.md"
+telemetry = ["traces", "metrics", "logs"]
+adrs = ["0005"]
+
+[[components.depends_on]]
+target = "identity-provider"
+kind = "sync"
+data = "internal"
+
+[[components.depends_on]]
+target = "eval-service"
+kind = "async"
+data = "internal"
+
+# ---- external
+
+[[components]]
+id = "primary-model-provider"
+name = "Primary model provider"
+layer = "external"
+tier = 1
+owner = "vendor-management"
+description = "Commercial frontier-model API."
+trust_zone = "external"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "primary-model-provider"
+adrs = ["0004"]
+
+[[components]]
+id = "secondary-model-provider"
+name = "Secondary model provider"
+layer = "external"
+tier = 2
+owner = "vendor-management"
+description = "Second commercial model API used for failover and comparison."
+trust_zone = "external"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "secondary-model-provider"
+adrs = ["0004"]
+
+[[components]]
+id = "enterprise-saas-apis"
+name = "Enterprise SaaS APIs"
+layer = "external"
+tier = 2
+owner = "vendor-management"
+description = "Ticketing, CRM and other systems the tools act on."
+trust_zone = "external"
+data_max_class = "confidential"
+availability = 99.5
+cost_tag = "enterprise-saas-apis"
