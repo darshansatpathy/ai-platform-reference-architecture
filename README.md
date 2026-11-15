@@ -149,6 +149,7 @@ same standard as this repository:
 - **The availability ceiling is a simplification.** It treats synchronous hard dependencies as independent and multiplies them, with a fallback formula for redundant paths. Real failures are correlated.
 - The runbooks are templates grounded in the catalog. They have not been exercised in an incident.
 - Mermaid diagrams are rendered by GitHub; they were not rendered during development.
+- Written and tested by an AI assistant (Claude) working with the repository owner; the design has not had an independent review.
 
 ## Contributing and security
 
